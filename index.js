@@ -10,7 +10,11 @@ function main() {
   // Register a slash command
   logseq.Editor.registerSlashCommand("Quick query", async () => {
     const { content, uuid } = await logseq.Editor.getCurrentBlock();
-    await logseq.Editor.insertAtEditingCursor(`{{renderer :qquery}} `);
+    const page = await logseq.Editor.getCurrentPage();
+    await logseq.Editor.insertAtEditingCursor(
+      `{{renderer :qquery, ${page.uuid}}} `,
+    );
+    await logseq.Editor.exitEditingMode();
   });
 
   function renderMyComponent({ slot, uuid }) {
@@ -61,6 +65,7 @@ function main() {
 
   logseq.provideModel({
     async fooFunction(event) {
+      console.log(event);
       const { slotId, blockUuid } = event.dataset;
       console.log(`Button pressed on ${blockUuid}`);
 
@@ -79,10 +84,11 @@ function main() {
   logseq.App.onMacroRendererSlotted(({ slot, payload }) => {
     // The arguments of {{renderer foo bar, baz beans, qux}} are ["foo bar", "baz beans", "qux"].
     // For us, the first argument is :qquery.
-    const [type, other, unused, args] = payload.arguments;
+    const [type, projectUUID, unused, args] = payload.arguments;
     const uuid = payload.uuid;
     if (!type === ":qquery") return;
 
+    console.log(projectUUID);
     console.log(payload);
     console.log(slot);
 
