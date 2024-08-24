@@ -20,26 +20,38 @@ function main() {
       reset: true,
       template: `
             <div
-            class="quick-query"
+            class="qquery"
             data-slot-id="${slot}"
-            data-block-uuid="${uuid}">
+            data-block-uuid="${uuid}"
+            data-on-click="fooFunction">
               <b>Quick Query</b>
-              <button data-on-click="fooFunction" class="qquery-tag-btn">Tag 1</button>
+              <div class="qquery-tag-container">
+                <button class="qquery-tag-btn">Tag 1</button>
+                <button class="qquery-tag-btn">Tag 2</button>
+                <button class="qquery-tag-btn">Tag 3</button>
+              </div>
             </div>
           `,
     });
   }
 
   logseq.provideStyle(`
+    .qquery {
+      white-space: normal;
+    }
+
+    .qquery-tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .qquery-tag-btn {
        border: 1px solid var(--ls-border-color);
        white-space: initial;
        padding: 2px 8px;
        border-radius: 16px;
-       user-select: none;
        cursor: pointer;
-       display: flex;
-       align-content: center;
     }
 
     .qquery-tag-btn:hover {
