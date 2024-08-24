@@ -22,13 +22,30 @@ function main() {
             <div
             class="quick-query"
             data-slot-id="${slot}"
-            data-block-uuid="${uuid}"
-            data-on-click="fooFunction">
-            <b>Quick Query</b>
+            data-block-uuid="${uuid}">
+              <b>Quick Query</b>
+              <button data-on-click="fooFunction" class="qquery-tag-btn">Tag 1</button>
             </div>
           `,
     });
   }
+
+  logseq.provideStyle(`
+    .qquery-tag-btn {
+       border: 1px solid var(--ls-border-color);
+       white-space: initial;
+       padding: 2px 8px;
+       border-radius: 16px;
+       user-select: none;
+       cursor: pointer;
+       display: flex;
+       align-content: center;
+    }
+
+    .qquery-tag-btn:hover {
+      background-color: #d3d3d3;
+    }
+    `);
 
   logseq.provideModel({
     async fooFunction(event) {
