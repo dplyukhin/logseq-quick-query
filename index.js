@@ -140,7 +140,13 @@ async function parseRendererQuery(uuid) {
  * - filteredTasks: the tasks that have all the selected tags
  */
 async function getTagsAndTasks(selectedTagNames) {
-  const page = await logseq.Editor.getCurrentPage();
+  let page = await logseq.Editor.getCurrentPage();
+  console.log("page", page);
+  if (page === null || (!page.name && !page.parent)) return;
+  if (!page.name) {
+    page = await logseq.Editor.getPage(page.parent.id);
+  }
+
   const tasks = await getTasksForPage(page.name);
   const tags = await getTagsForPage(page.name);
 
@@ -238,8 +244,9 @@ function main() {
 
   async function renderComponent(uuid, slot, selectedTagNames) {
     // Get the selected tags, remaining tags, and filtered tasks
-    const { selectedTags, remainingTags, filteredTasks } =
-      await getTagsAndTasks(selectedTagNames);
+    const tagsAndTasks = await getTagsAndTasks(selectedTagNames);
+    if (!tagsAndTasks) return renderFailure(uuid, slot);
+    const { selectedTags, remainingTags, filteredTasks } = tagsAndTasks;
 
     console.log("selectedTags", selectedTags);
     console.log("filteredTasks", filteredTasks);
@@ -298,6 +305,15 @@ function main() {
       selectedTags,
       remainingTags,
       filteredTasks,
+    });
+  }
+
+  function renderFailure(uuid, slot) {
+    return logseq.provideUI({
+      key: getKey(uuid),
+      slot,
+      reset: true,
+      template: `Quick Query couldn't find any tasks related to the current page!`,
     });
   }
 
@@ -392,8 +408,9 @@ function main() {
     const uuid = payload.uuid;
 
     const selectedTagNames = await parseRendererQuery(uuid);
-    const { selectedTags, remainingTags, filteredTasks } =
-      await getTagsAndTasks(selectedTagNames);
+    const tagsAndTasks = await getTagsAndTasks(selectedTagNames);
+    if (!tagsAndTasks) return renderFailure(uuid, slot);
+    const { selectedTags, remainingTags, filteredTasks } = tagsAndTasks;
 
     return renderTagListing({
       slot,
