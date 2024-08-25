@@ -149,15 +149,27 @@ async function getTagsAndTasks(selectedTagNames) {
       task["path-refs"].map((obj) => obj.id).includes(tag.id),
     ),
   );
-  // Get the tags in the filtered tasks that are not selected
+  // Get the properties of those tasks
+  const taskProperties = new Set(
+    filteredTasks.map((task) => task["properties-order"]).flat(),
+  );
+
+  // Get the tags in the filtered tasks that are not selected or
+  // are otherwise undesirable
   const remainingTags = tags.filter((tag) => {
+    // Filter out selected tags
     if (selectedTagNames.includes(tag.name)) return false;
+    // Filter out tags that are properties of the tasks
+    if (taskProperties.has(tag.name)) return false;
+    // Filter out tags that are not in the filtered tasks
     if (
-      filteredTasks.some((task) =>
+      !filteredTasks.some((task) =>
         task["path-refs"].map((obj) => obj.id).includes(tag.id),
       )
     )
-      return true;
+      return false;
+
+    return true;
   });
 
   return { selectedTags, remainingTags, filteredTasks };
@@ -212,6 +224,9 @@ function main() {
     // Get the selected tags, remaining tags, and filtered tasks
     const { selectedTags, remainingTags, filteredTasks } =
       await getTagsAndTasks(selectedTagNames);
+
+    console.log("selectedTags", selectedTags);
+    console.log("filteredTasks", filteredTasks);
 
     // Get the children of the block
     const block = await logseq.Editor.getBlock(uuid);
