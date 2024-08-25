@@ -328,13 +328,6 @@ function main() {
                 </a>
                 ${selectedTags.map((tag) => _renderTag(tag, slot, uuid, true)).join("")}
                 ${remainingTags.map((tag) => _renderTag(tag, slot, uuid, false)).join("")}
-                ${
-                  overflowTasks <= 0
-                    ? ""
-                    : overflowTasks == 1
-                      ? `<div class="qquery-task-count">(1 other task matches this query)</div>`
-                      : `<div class="qquery-task-count">(${overflowTasks} other tasks match this query)</div>`
-                }
               </div>
             </div>
           `,
