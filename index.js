@@ -161,6 +161,10 @@ async function getTagsAndTasks(selectedTagNames) {
     if (selectedTagNames.includes(tag.name)) return false;
     // Filter out tags that are properties of the tasks
     if (taskProperties.has(tag.name)) return false;
+    // Filter out the current page
+    if (tag.uuid === page.uuid) return false;
+    // Filter out "todo" and "doing" tags
+    if (tag.name === "todo" || tag.name === "doing") return false;
     // Filter out tags that are not in the filtered tasks
     if (
       !filteredTasks.some((task) =>
@@ -171,6 +175,9 @@ async function getTagsAndTasks(selectedTagNames) {
 
     return true;
   });
+
+  // Sort the tags by name
+  remainingTags.sort((a, b) => a.name.localeCompare(b.name));
 
   return { selectedTags, remainingTags, filteredTasks };
 }
