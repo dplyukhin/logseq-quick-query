@@ -1,16 +1,43 @@
-/** Get all the doable tasks on the page named `lowercaseBlockName`. */
+/** Get all the doable tasks on the page named `lowercaseBlockName`.
+ * Returns a list of tasks. Each task is an object of the form:
+ {
+     "properties": {
+         "link": "https://doc.akka.io/docs/akka/current/typed/cluster-sharding.html"
+     },
+     "parent": {
+         "id": 9948
+     },
+     "id": 9947,
+     "uuid": "66ca2950-a8ed-43bd-a734-6e2bdcaeb713",
+     "path-refs": [
+         {
+             "id": 4
+         }, ....
+     ],
+     "marker": "TODO",
+     "page": {
+         "id": 4526
+     },
+     "refs": [
+         {
+             "id": 4
+         }, ...
+     ]
+ }
+*/
 async function getTasksForPage(lowercaseBlockName) {
   let ret;
   try {
     ret = await logseq.DB.datascriptQuery(`
-      [:find (pull ?task [:block/name])
+      [:find (pull ?task [*])
        :where
        ; Get current page
-       [?page :block/name ${lowercaseBlockName}]
+       [?page :block/name "${lowercaseBlockName}"]
        ; Get tasks on the page
        [?task :block/page ?page]
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
+      ]
     `);
   } catch (e) {
     console.error(e);
@@ -19,7 +46,20 @@ async function getTasksForPage(lowercaseBlockName) {
   return (ret || []).flat();
 }
 
-/** Like getTasksForPage, but returns only the *tags* associated with those tasks. */
+/**
+ * Like getTasksForPage, but returns only the *tags* associated with those tasks.
+ * Returns a list of tags. Each tag is an object of the form:
+ {
+     "id": 9841,
+     "created-at": 1724428891233,
+     "journal?": false,
+     "name": "related work",
+     "original-name": "Related work",
+     "updated-at": 1724428891233,
+     "uuid": "66ca2950-8c1c-42c9-a67e-27c133b2025a"
+ }
+ * Notice that "name" is just original-name converted to lowercase.
+ */
 async function getTagsForPage(lowercaseBlockName) {
   let ret;
   try {
@@ -27,13 +67,14 @@ async function getTagsForPage(lowercaseBlockName) {
       [:find (pull ?tag [*])
        :where
        ; Get current page
-       [?page :block/name "preparing uigc for pldi"]
+       [?page :block/name "${lowercaseBlockName}"]
        ; Get tasks on the page
        [?task :block/page ?page]
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
        ; Get tags of those tasks
        [?task :block/path-refs ?tag]
+      ]
     `);
   } catch (e) {
     console.error(e);
@@ -89,7 +130,7 @@ function main() {
 
   ///////////////////////////////// RENDER /////////////////////////////////
 
-  function renderMyComponent({ slot, uuid }) {
+  function renderMyComponent({ slot, uuid, selectedTags, remainingTags }) {
     return logseq.provideUI({
       key: getKey(uuid),
       slot,
@@ -108,6 +149,14 @@ function main() {
             </div>
           `,
     });
+  }
+
+  function _renderTag(tag, isSelected) {
+    return `
+      <button data-on-click="fooFunction" class="qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}">
+        ${tag.originalName}
+      </button>
+    `;
   }
 
   ///////////////////////////////// EVENT HANDLERS /////////////////////////////////
@@ -133,14 +182,44 @@ function main() {
   logseq.App.onMacroRendererSlotted(async ({ slot, payload }) => {
     // The arguments of {{renderer foo bar, baz beans, qux}} are ["foo bar", "baz beans", "qux"].
     // For us, the first argument is :qquery.
-    const [type, tags] = payload.arguments;
+    // The rest of the arguments are the tags that the user has selected, in all-lowercase.
+    const type = payload.arguments[0];
+    const selectedTagNames = payload.arguments.slice(1);
     const uuid = payload.uuid;
     if (!type === ":qquery") return;
 
     const page = await logseq.Editor.getCurrentPage();
-    console.log(page.name);
+    const tasks = await getTasksForPage(page.name);
+    const tags = await getTagsForPage(page.name);
+    console.log("tasks", tasks);
+    console.log("tags", tags);
     console.log(payload);
     console.log(slot);
+
+    // Get the tags that the user has selected
+    const selectedTags = tags.filter((tag) =>
+      selectedTagNames.includes(tag.name),
+    );
+    // Get the tasks that have all the selected tags
+    const filteredTasks = tasks.filter((task) =>
+      selectedTags.every((tag) =>
+        task["path-refs"].map((obj) => obj.id).includes(tag.id),
+      ),
+    );
+    // Get the tags in the filtered tasks that are not selected
+    const remainingTags = tags.filter((tag) => {
+      if (selectedTagNames.includes(tag.name)) return false;
+      if (
+        filteredTasks.some((task) =>
+          task["path-refs"].map((obj) => obj.id).includes(tag.id),
+        )
+      )
+        return true;
+    });
+
+    console.log("selectedTags", selectedTags);
+    console.log("remainingTags", remainingTags);
+    console.log("filteredTasks", filteredTasks);
 
     return renderMyComponent({ slot, uuid });
   });
