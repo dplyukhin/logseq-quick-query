@@ -296,7 +296,7 @@ function main() {
 
     setTimeout(() => {
       logseq.Editor.exitEditingMode();
-    }, 100);
+    }, 20);
 
     // Render the tag listing
     renderTagListing({
