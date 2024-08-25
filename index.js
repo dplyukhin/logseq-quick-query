@@ -83,15 +83,68 @@ async function getTagsForPage(lowercaseBlockName) {
   return (ret || []).flat();
 }
 
+/** Given a list of tag names, return a renderer query that filters by those tag names. */
+function generateRendererQuery(tagNames) {
+  if (!tagNames || tagNames.length === 0) {
+    return `{{renderer :qquery}}`;
+  } else {
+    return `{{renderer :qquery, ${tagNames.join(", ")}}}`;
+  }
+}
+
+/** Given a block that contains {{renderer :qquery, tag1, tag2, ...}} in its content,
+ * return [tag1, tag2, ...]. */
+async function parseRendererQuery(uuid) {
+  // Get the block
+  const block = await logseq.Editor.getBlock(uuid);
+  const content = block?.content;
+  // Parse its contents
+  const regex = /{{renderer :qquery,?\s*(.*)}}/;
+  const match = content.match(regex);
+  if (match && match[1]) {
+    return match[1].split(",").map((tag) => tag.trim());
+  } else {
+    return [];
+  }
+}
+
+/** Given a list of tag names the user selected, return an object with:
+ * - selectedTags: the tags that the user has selected
+ * - remainingTags: the tags in the filtered tasks that are not selected
+ * - filteredTasks: the tasks that have all the selected tags
+ */
+async function getTagsAndTasks(selectedTagNames) {
+  const page = await logseq.Editor.getCurrentPage();
+  const tasks = await getTasksForPage(page.name);
+  const tags = await getTagsForPage(page.name);
+
+  // Get the tags that the user has selected
+  const selectedTags = tags.filter((tag) =>
+    selectedTagNames.includes(tag.name),
+  );
+  // Get the tasks that have all the selected tags
+  const filteredTasks = tasks.filter((task) =>
+    selectedTags.every((tag) =>
+      task["path-refs"].map((obj) => obj.id).includes(tag.id),
+    ),
+  );
+  // Get the tags in the filtered tasks that are not selected
+  const remainingTags = tags.filter((tag) => {
+    if (selectedTagNames.includes(tag.name)) return false;
+    if (
+      filteredTasks.some((task) =>
+        task["path-refs"].map((obj) => obj.id).includes(tag.id),
+      )
+    )
+      return true;
+  });
+
+  return { selectedTags, remainingTags, filteredTasks };
+}
+
 /********* MAIN  *********/
 
 function main() {
-  const genRandomStr = () =>
-    Math.random()
-      .toString(36)
-      .replace(/[^a-z]+/g, "")
-      .substr(0, 5);
-
   const getKey = (uuid) => `qquery_${uuid}`;
 
   /////////////////////////// REGISTER THE COMMAND ///////////////////////////
@@ -134,7 +187,13 @@ function main() {
 
   ///////////////////////////////// RENDER /////////////////////////////////
 
-  function renderMyComponent({ slot, uuid, selectedTags, remainingTags }) {
+  function renderMyComponent({
+    slot,
+    uuid,
+    selectedTags,
+    remainingTags,
+    filteredTasks,
+  }) {
     return logseq.provideUI({
       key: getKey(uuid),
       slot,
@@ -144,20 +203,25 @@ function main() {
             class="qquery"
             data-slot-id="${slot}"
             data-block-uuid="${uuid}" >
-              <b>Quick Query</b>
               <div class="qquery-tag-container">
-                ${selectedTags.map((tag) => _renderTag(tag, true)).join("")}
-                ${remainingTags.map((tag) => _renderTag(tag, false)).join("")}
+                ${selectedTags.map((tag) => _renderTag(tag, slot, uuid, true)).join("")}
+                ${remainingTags.map((tag) => _renderTag(tag, slot, uuid, false)).join("")}
               </div>
             </div>
           `,
     });
   }
 
-  function _renderTag(tag, isSelected) {
+  function _renderTag(tag, slot, uuid, isSelected) {
     return `
-      <button data-on-click="fooFunction" class="qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}">
-        ${tag["name"]}
+      <button
+        data-on-click="fooFunction"
+        data-slot-id="${slot}"
+        data-block-uuid="${uuid}"
+        data-tag-name="${tag.name}"
+        class="qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}"
+      >
+        ${tag.name}
       </button>
     `;
   }
@@ -167,17 +231,33 @@ function main() {
   logseq.provideModel({
     async fooFunction(event) {
       console.log(event);
-      const { slotId, blockUuid } = event.dataset;
-      console.log(`Button pressed on ${blockUuid}`);
+      const slot = event.dataset.slotId;
+      const uuid = event.dataset.blockUuid;
+      const tagName = event.dataset.tagName;
+      console.log(`${tagName} pressed on ${uuid}`);
 
-      const block = await logseq.Editor.getBlock(blockUuid);
-      const newContent = block?.content;
-      if (!newContent) return;
+      const selectedTagNames = await parseRendererQuery(blockUuid);
+      const { selectedTags, remainingTags, filteredTasks } =
+        await getTagsAndTasks(selectedTagNames);
+
       // Do something with the block...
-      await logseq.Editor.updateBlock(blockUuid, newContent);
+      // await logseq.Editor.updateBlock(blockUuid, newContent);
+
+      //const embeddedTasks = filteredTasks.map((task) => {
+      //  return { content: `((${task.uuid}))` };
+      //});
+      //logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
+      //  sibling: false,
+      //});
 
       // Render the component
-      renderMyComponent({ slot: slotId, uuid: blockUuid });
+      renderMyComponent({
+        slot,
+        uuid,
+        selectedTags,
+        remainingTags,
+        filteredTasks,
+      });
     },
   });
 
@@ -186,45 +266,20 @@ function main() {
     // The arguments of {{renderer foo bar, baz beans, qux}} are ["foo bar", "baz beans", "qux"].
     // For us, the first argument is :qquery.
     // The rest of the arguments are the tags that the user has selected, in all-lowercase.
-    const type = payload.arguments[0];
-    const selectedTagNames = payload.arguments.slice(1);
+    if (payload.arguments[0] !== ":qquery") return;
     const uuid = payload.uuid;
-    if (!type === ":qquery") return;
 
-    const page = await logseq.Editor.getCurrentPage();
-    const tasks = await getTasksForPage(page.name);
-    const tags = await getTagsForPage(page.name);
-    console.log("tasks", tasks);
-    console.log("tags", tags);
-    console.log(payload);
-    console.log(slot);
+    const selectedTagNames = await parseRendererQuery(uuid);
+    const { selectedTags, remainingTags, filteredTasks } =
+      await getTagsAndTasks(selectedTagNames);
 
-    // Get the tags that the user has selected
-    const selectedTags = tags.filter((tag) =>
-      selectedTagNames.includes(tag.name),
-    );
-    // Get the tasks that have all the selected tags
-    const filteredTasks = tasks.filter((task) =>
-      selectedTags.every((tag) =>
-        task["path-refs"].map((obj) => obj.id).includes(tag.id),
-      ),
-    );
-    // Get the tags in the filtered tasks that are not selected
-    const remainingTags = tags.filter((tag) => {
-      if (selectedTagNames.includes(tag.name)) return false;
-      if (
-        filteredTasks.some((task) =>
-          task["path-refs"].map((obj) => obj.id).includes(tag.id),
-        )
-      )
-        return true;
+    return renderMyComponent({
+      slot,
+      uuid,
+      selectedTags,
+      remainingTags,
+      filteredTasks,
     });
-
-    console.log("selectedTags", selectedTags);
-    console.log("remainingTags", remainingTags);
-    console.log("filteredTasks", filteredTasks);
-
-    return renderMyComponent({ slot, uuid, selectedTags, remainingTags });
   });
 }
 
