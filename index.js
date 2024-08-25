@@ -222,10 +222,12 @@ function main() {
     const embeddedTasks = filteredTasks.map((task) => {
       return { content: `{{embed ((${task.uuid}))}}` };
     });
-    logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
+    await logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
       sibling: false,
     });
-    await logseq.Editor.exitEditingMode();
+    setTimeout(() => {
+      logseq.Editor.exitEditingMode();
+    }, 100);
 
     // Render the tag listing
     renderTagListing({
