@@ -208,7 +208,36 @@ function main() {
 
   ///////////////////////////////// RENDER /////////////////////////////////
 
-  function renderMyComponent({
+  async function renderComponent(uuid, slot, selectedTagNames) {
+    // Get the selected tags, remaining tags, and filtered tasks
+    const { selectedTags, remainingTags, filteredTasks } =
+      await getTagsAndTasks(selectedTagNames);
+
+    // Update the task list
+    const block = await logseq.Editor.getBlock(uuid);
+    if (block.children)
+      for (const [_, uuid] of block.children) {
+        await logseq.Editor.removeBlock(uuid);
+      }
+    const embeddedTasks = filteredTasks.map((task) => {
+      return { content: `{{embed ((${task.uuid}))}}` };
+    });
+    logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
+      sibling: false,
+    });
+    await logseq.Editor.exitEditingMode();
+
+    // Render the tag listing
+    renderTagListing({
+      slot,
+      uuid,
+      selectedTags,
+      remainingTags,
+      filteredTasks,
+    });
+  }
+
+  function renderTagListing({
     slot,
     uuid,
     selectedTags,
@@ -255,72 +284,26 @@ function main() {
       const slot = event.dataset.slotId;
       const uuid = event.dataset.blockUuid;
       const tagName = event.dataset.tagName;
-      console.log(`${tagName} pressed on ${uuid}`);
-
-      // Get the selected tags
       const selectedTagNames = await parseRendererQuery(uuid);
 
       // Update the block with the new tags
       selectedTagNames.push(tagName);
       await updateRendererQuery(uuid, selectedTagNames);
 
-      const { selectedTags, remainingTags, filteredTasks } =
-        await getTagsAndTasks(selectedTagNames);
-
-      // Do something with the block...
-      // await logseq.Editor.updateBlock(blockUuid, newContent);
-
-      //const embeddedTasks = filteredTasks.map((task) => {
-      //  return { content: `((${task.uuid}))` };
-      //});
-      //logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
-      //  sibling: false,
-      //});
-
-      // Render the component
-      renderMyComponent({
-        slot,
-        uuid,
-        selectedTags,
-        remainingTags,
-        filteredTasks,
-      });
+      return await renderComponent(uuid, slot, selectedTagNames);
     },
     async unselectTag(event) {
       console.log(event);
       const slot = event.dataset.slotId;
       const uuid = event.dataset.blockUuid;
       const tagName = event.dataset.tagName;
-      console.log(`${tagName} pressed on ${uuid}`);
-
-      // Get the selected tags
       const selectedTagNames = await parseRendererQuery(uuid);
 
       // Update the block with the new tags
       selectedTagNames.splice(selectedTagNames.indexOf(tagName), 1);
       await updateRendererQuery(uuid, selectedTagNames);
 
-      const { selectedTags, remainingTags, filteredTasks } =
-        await getTagsAndTasks(selectedTagNames);
-
-      // Do something with the block...
-      // await logseq.Editor.updateBlock(blockUuid, newContent);
-
-      //const embeddedTasks = filteredTasks.map((task) => {
-      //  return { content: `((${task.uuid}))` };
-      //});
-      //logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
-      //  sibling: false,
-      //});
-
-      // Render the component
-      renderMyComponent({
-        slot,
-        uuid,
-        selectedTags,
-        remainingTags,
-        filteredTasks,
-      });
+      return await renderComponent(uuid, slot, selectedTagNames);
     },
   });
 
@@ -336,7 +319,7 @@ function main() {
     const { selectedTags, remainingTags, filteredTasks } =
       await getTagsAndTasks(selectedTagNames);
 
-    return renderMyComponent({
+    return renderTagListing({
       slot,
       uuid,
       selectedTags,
