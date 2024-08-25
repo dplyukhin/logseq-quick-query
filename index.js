@@ -144,9 +144,9 @@ async function getTagsAndTasks(selectedTagNames) {
   const tasks = await getTasksForPage(page.name);
   const tags = await getTagsForPage(page.name);
 
-  // Get the tags that the user has selected
-  const selectedTags = tags.filter((tag) =>
-    selectedTagNames.includes(tag.name),
+  // Get the tags that the user has selected, in the order they selected them
+  const selectedTags = selectedTagNames.map((tagName) =>
+    tags.find((tag) => tag.name === tagName),
   );
   // Get the tasks that have all the selected tags
   const filteredTasks = tasks.filter((task) =>
