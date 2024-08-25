@@ -123,6 +123,10 @@ function main() {
          cursor: pointer;
       }
 
+      .qquery-tag-selected {
+        background-color: #d3d3d3;
+      }
+
       .qquery-tag-btn:hover {
         background-color: #d3d3d3;
       }
@@ -142,9 +146,8 @@ function main() {
             data-block-uuid="${uuid}" >
               <b>Quick Query</b>
               <div class="qquery-tag-container">
-                <button data-on-click="fooFunction" class="qquery-tag-btn">Tag 1</button>
-                <button data-on-click="fooFunction" class="qquery-tag-btn">Tag 2</button>
-                <button data-on-click="fooFunction" class="qquery-tag-btn">Tag 3</button>
+                ${selectedTags.map((tag) => _renderTag(tag, true)).join("")}
+                ${remainingTags.map((tag) => _renderTag(tag, false)).join("")}
               </div>
             </div>
           `,
@@ -154,7 +157,7 @@ function main() {
   function _renderTag(tag, isSelected) {
     return `
       <button data-on-click="fooFunction" class="qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}">
-        ${tag.originalName}
+        ${tag["name"]}
       </button>
     `;
   }
@@ -221,7 +224,7 @@ function main() {
     console.log("remainingTags", remainingTags);
     console.log("filteredTasks", filteredTasks);
 
-    return renderMyComponent({ slot, uuid });
+    return renderMyComponent({ slot, uuid, selectedTags, remainingTags });
   });
 }
 
