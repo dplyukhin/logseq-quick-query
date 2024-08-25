@@ -36,8 +36,9 @@ async function getTasksForPage(lowercaseBlockName) {
        :where
        ; Get current page
        [?page :block/name "${lowercaseBlockName}"]
-       ; Get tasks on the page
-       [?task :block/page ?page]
+       ; Get tasks on the page, or tasks that reference the page
+       (or [?task :block/page ?page]
+           [?task :block/path-refs ?page])
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
       ]
@@ -71,8 +72,9 @@ async function getTagsForPage(lowercaseBlockName) {
        :where
        ; Get current page
        [?page :block/name "${lowercaseBlockName}"]
-       ; Get tasks on the page
-       [?task :block/page ?page]
+       ; Get tasks on the page, or tasks that reference the page
+       (or [?task :block/page ?page]
+           [?task :block/path-refs ?page])
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
        ; Get tags of those tasks
@@ -168,6 +170,8 @@ async function getTagsAndTasks(selectedTagNames) {
     if (tag.uuid === page.uuid) return false;
     // Filter out "todo" and "doing" tags
     if (tag.name === "todo" || tag.name === "doing") return false;
+    // Filter out journal tags
+    if (tag["journal?"]) return false;
     // Filter out tags that are not in the filtered tasks
     if (
       !filteredTasks.some((task) =>
