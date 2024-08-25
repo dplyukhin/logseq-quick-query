@@ -92,6 +92,27 @@ function generateRendererQuery(tagNames) {
   }
 }
 
+/** Given a block that contains {{renderer :query, ...}} in its content, and
+ * a list of tag names [tag1, tag2, ...], replace that renderer query with the
+ * updated {{renderer :query, tag1, tag2, ...}}.
+ */
+async function updateRendererQuery(uuid, tagNames) {
+  // Fetch the block
+  const block = await logseq.Editor.getBlock(uuid);
+  const content = block?.content;
+  // Find the old renderer query
+  const regex = /{{renderer :qquery,?\s*(.*)}}/;
+  const match = content.match(regex);
+  if (!match) return;
+  // Replace the old renderer query with the new one
+  const oldQuery = match[0];
+  const newQuery = generateRendererQuery(tagNames);
+  const newContent = content.replace(oldQuery, newQuery);
+  console.log("new content", newContent);
+  // Update the block
+  await logseq.Editor.updateBlock(uuid, newContent);
+}
+
 /** Given a block that contains {{renderer :qquery, tag1, tag2, ...}} in its content,
  * return [tag1, tag2, ...]. */
 async function parseRendererQuery(uuid) {
@@ -215,7 +236,7 @@ function main() {
   function _renderTag(tag, slot, uuid, isSelected) {
     return `
       <button
-        data-on-click="fooFunction"
+        data-on-click="${isSelected ? "unselectTag" : "selectTag"}"
         data-slot-id="${slot}"
         data-block-uuid="${uuid}"
         data-tag-name="${tag.name}"
@@ -229,14 +250,56 @@ function main() {
   ///////////////////////////////// EVENT HANDLERS /////////////////////////////////
 
   logseq.provideModel({
-    async fooFunction(event) {
+    async selectTag(event) {
       console.log(event);
       const slot = event.dataset.slotId;
       const uuid = event.dataset.blockUuid;
       const tagName = event.dataset.tagName;
       console.log(`${tagName} pressed on ${uuid}`);
 
-      const selectedTagNames = await parseRendererQuery(blockUuid);
+      // Get the selected tags
+      const selectedTagNames = await parseRendererQuery(uuid);
+
+      // Update the block with the new tags
+      selectedTagNames.push(tagName);
+      await updateRendererQuery(uuid, selectedTagNames);
+
+      const { selectedTags, remainingTags, filteredTasks } =
+        await getTagsAndTasks(selectedTagNames);
+
+      // Do something with the block...
+      // await logseq.Editor.updateBlock(blockUuid, newContent);
+
+      //const embeddedTasks = filteredTasks.map((task) => {
+      //  return { content: `((${task.uuid}))` };
+      //});
+      //logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
+      //  sibling: false,
+      //});
+
+      // Render the component
+      renderMyComponent({
+        slot,
+        uuid,
+        selectedTags,
+        remainingTags,
+        filteredTasks,
+      });
+    },
+    async unselectTag(event) {
+      console.log(event);
+      const slot = event.dataset.slotId;
+      const uuid = event.dataset.blockUuid;
+      const tagName = event.dataset.tagName;
+      console.log(`${tagName} pressed on ${uuid}`);
+
+      // Get the selected tags
+      const selectedTagNames = await parseRendererQuery(uuid);
+
+      // Update the block with the new tags
+      selectedTagNames.splice(selectedTagNames.indexOf(tagName), 1);
+      await updateRendererQuery(uuid, selectedTagNames);
+
       const { selectedTags, remainingTags, filteredTasks } =
         await getTagsAndTasks(selectedTagNames);
 
