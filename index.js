@@ -213,6 +213,7 @@ function main() {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        color: var(--ls-primary-text-color);
       }
 
       .qquery-tag-btn {
@@ -223,12 +224,13 @@ function main() {
          cursor: pointer;
       }
 
-      .qquery-tag-selected {
-        background-color: #d3d3d3;
+      .qquery-task-count {
+        padding-top: 2px;
+        color: var(--ls-primary-text-color);
       }
 
-      .qquery-tag-btn:hover {
-        background-color: #d3d3d3;
+      .qquery-tag-selected {
+        background-color: var(--ls-selection-background-color);
       }
       `);
 
@@ -306,6 +308,7 @@ function main() {
     remainingTags,
     filteredTasks,
   }) {
+    const overflowTasks = filteredTasks.length - MAX_TASKS;
     return logseq.provideUI({
       key: getKey(uuid),
       slot,
@@ -316,8 +319,22 @@ function main() {
             data-slot-id="${slot}"
             data-block-uuid="${uuid}" >
               <div class="qquery-tag-container">
+                <a class="button" data-slot-id="${slot}" data-block-uuid="${uuid}" data-on-click="reload">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-reload" width="100%" height="100%" viewBox="0 0 24 24" stroke-width="1.5" stroke="#2c3e50" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M19.933 13.041a8 8 0 1 1 -9.925 -8.788c3.899 -1 7.935 1.007 9.425 4.747" />
+                    <path d="M20 4v5h-5" />
+                  </svg>
+                </a>
                 ${selectedTags.map((tag) => _renderTag(tag, slot, uuid, true)).join("")}
                 ${remainingTags.map((tag) => _renderTag(tag, slot, uuid, false)).join("")}
+                ${
+                  overflowTasks <= 0
+                    ? ""
+                    : overflowTasks == 1
+                      ? `<div class="qquery-task-count">(1 other task matches this query)</div>`
+                      : `<div class="qquery-task-count">(${overflowTasks} other tasks match this query)</div>`
+                }
               </div>
             </div>
           `,
@@ -331,7 +348,7 @@ function main() {
         data-slot-id="${slot}"
         data-block-uuid="${uuid}"
         data-tag-name="${tag.name}"
-        class="qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}"
+        class="button qquery-tag-btn ${isSelected ? "qquery-tag-selected" : ""}"
       >
         ${tag.name}
       </button>
@@ -341,8 +358,13 @@ function main() {
   ///////////////////////////////// EVENT HANDLERS /////////////////////////////////
 
   logseq.provideModel({
+    async reload(event) {
+      const slot = event.dataset.slotId;
+      const uuid = event.dataset.blockUuid;
+      const selectedTagNames = await parseRendererQuery(uuid);
+      return await renderComponent(uuid, slot, selectedTagNames);
+    },
     async selectTag(event) {
-      console.log(event);
       const slot = event.dataset.slotId;
       const uuid = event.dataset.blockUuid;
       const tagName = event.dataset.tagName;
@@ -355,7 +377,6 @@ function main() {
       return await renderComponent(uuid, slot, selectedTagNames);
     },
     async unselectTag(event) {
-      console.log(event);
       const slot = event.dataset.slotId;
       const uuid = event.dataset.blockUuid;
       const tagName = event.dataset.tagName;
