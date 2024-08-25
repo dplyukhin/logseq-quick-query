@@ -213,18 +213,47 @@ function main() {
     const { selectedTags, remainingTags, filteredTasks } =
       await getTagsAndTasks(selectedTagNames);
 
-    // Update the task list
+    // Get the children of the block
     const block = await logseq.Editor.getBlock(uuid);
-    if (block.children)
-      for (const [_, uuid] of block.children) {
-        await logseq.Editor.removeBlock(uuid);
+    const children = block.children ? block.children.map((x) => x[1]) : [];
+    console.log("children", children);
+
+    // The set of tasks that are already embedded
+    const embeddedTasks = new Set();
+
+    // Remove the embedded tasks that are no longer needed
+    for (let i = 0; i < children.length; i++) {
+      // Get the child's contents
+      const child = await logseq.Editor.getBlock(children[i]);
+      // Regex matching children of the form {{embed (($uuid))}}
+      const regex = /{{embed \(\(([0-9a-f-]+)\)\)}}/;
+      const match = child.content.match(regex);
+      if (match) {
+        const taskUuid = match[1];
+        if (filteredTasks.map((task) => task.uuid).includes(taskUuid)) {
+          console.log("keeping child", child);
+          embeddedTasks.add(taskUuid);
+        } else {
+          console.log("removing child", child);
+          await logseq.Editor.removeBlock(children[i]);
+        }
+      } else {
+        console.log("ignoring child", child);
       }
-    const embeddedTasks = filteredTasks.map((task) => {
-      return { content: `{{embed ((${task.uuid}))}}` };
-    });
-    await logseq.Editor.insertBatchBlock(uuid, embeddedTasks, {
-      sibling: false,
-    });
+    }
+
+    // Add the embedded tasks that are needed
+    for (let i = 0; i < filteredTasks.length; i++) {
+      const task = filteredTasks[i];
+      if (!embeddedTasks.has(task.uuid)) {
+        const newChild = await logseq.Editor.insertBlock(
+          uuid,
+          `{{embed ((${task.uuid}))}}`,
+        );
+        console.log("added child", newChild);
+      }
+    }
+
     setTimeout(() => {
       logseq.Editor.exitEditingMode();
     }, 100);
