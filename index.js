@@ -1,3 +1,6 @@
+/** Do not show more than MAX_TASKS tasks. */
+const MAX_TASKS = 3;
+
 /** Get all the doable tasks on the page named `lowercaseBlockName`.
  * Returns a list of tasks. Each task is an object of the form:
  {
@@ -265,13 +268,15 @@ function main() {
     }
 
     // Add the embedded tasks that are needed
+    let taskCount = embeddedTasks.size;
     for (let i = 0; i < filteredTasks.length; i++) {
       const task = filteredTasks[i];
-      if (!embeddedTasks.has(task.uuid)) {
+      if (!embeddedTasks.has(task.uuid) && taskCount < MAX_TASKS) {
         const newChild = await logseq.Editor.insertBlock(
           uuid,
           `{{embed ((${task.uuid}))}}`,
         );
+        taskCount++;
         console.log("added child", newChild);
       }
     }
