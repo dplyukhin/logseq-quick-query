@@ -487,8 +487,8 @@ function main() {
     for (let i = 0; i < children.length; i++) {
       // Get the child's contents
       const child = await logseq.Editor.getBlock(children[i]);
-      // Regex matching children of the form {{embed (($uuid))}}
-      const regex = /{{embed \(\(([0-9a-f-]+)\)\)}}/;
+      // Regex matching children of the form (($uuid))
+      const regex = /\(\(([0-9a-f-]+)\)\)/;
       const match = child.content.match(regex);
       if (match) {
         const taskUuid = match[1];
@@ -514,7 +514,7 @@ function main() {
       ) {
         const newChild = await logseq.Editor.insertBlock(
           uuid,
-          `{{embed ((${task.uuid}))}}`,
+          `((${task.uuid}))`,
         );
         taskCount++;
         console.log("added child", newChild);
