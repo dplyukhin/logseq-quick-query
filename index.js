@@ -1,5 +1,21 @@
-/** Do not show more than MAX_TASKS tasks. */
-const MAX_TASKS = 3;
+/******************************* SETTINGS *****************************/
+
+const defineSettings = [
+  {
+    key: "maxTasks",
+    title: "The maximum number of tasks to show",
+    description: "The maximum number of tasks to show",
+    default: 3,
+    type: "number",
+  },
+];
+
+logseq.useSettingsSchema(defineSettings);
+logseq.onSettingsChanged(() => {
+  console.log("Quick query setting updated.");
+});
+
+/******************************* HELPERS *****************************/
 
 /** Get all the doable tasks on the page named `lowercaseBlockName`.
  * Returns a list of tasks. Each task is an object of the form:
@@ -284,7 +300,10 @@ function main() {
     let taskCount = embeddedTasks.size;
     for (let i = 0; i < filteredTasks.length; i++) {
       const task = filteredTasks[i];
-      if (!embeddedTasks.has(task.uuid) && taskCount < MAX_TASKS) {
+      if (
+        !embeddedTasks.has(task.uuid) &&
+        taskCount < logseq.settings.maxTasks
+      ) {
         const newChild = await logseq.Editor.insertBlock(
           uuid,
           `{{embed ((${task.uuid}))}}`,
@@ -324,7 +343,7 @@ function main() {
     remainingTags,
     filteredTasks,
   }) {
-    const overflowTasks = filteredTasks.length - MAX_TASKS;
+    const overflowTasks = filteredTasks.length - logseq.settings.maxTasks;
     return logseq.provideUI({
       key: getKey(uuid),
       slot,
