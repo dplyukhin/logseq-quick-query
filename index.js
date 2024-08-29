@@ -239,9 +239,13 @@ async function getDependentTaskIDs(tasks) {
   const ancestors = {};
   for (const task of tasks) {
     ancestors[task.id] = await getAncestors(task);
+    console.log(
+      `Ancestors of "${task.content.slice(0, 25)}...":`,
+      ancestors[task.id],
+    );
   }
 
-  //console.log("Checking tasks for dependencies...", tasks);
+  console.log("Checking tasks for dependencies...", tasks);
   // For each pair of tasks, check if one depends on the other
   const dependentTaskIDs = new Set();
   for (let i = 0; i < tasks.length; i++) {
@@ -251,24 +255,27 @@ async function getDependentTaskIDs(tasks) {
       const comparison = compareTasks(t1, t2, ancestors);
       if (comparison < 0) {
         // t1 is a dependency of t2
-        //console.log(
-        //  `"${t1.content.slice(0, 25)}..." happens before "${t2.content.slice(0, 25)}..."`,
-        //);
+        console.log(
+          `"${t1.content.slice(0, 25)}..." happens before "${t2.content.slice(0, 25)}..."`,
+        );
         dependentTaskIDs.add(t2.id);
       } else if (comparison > 0) {
         // t1 depends on t2
-        //console.log(
-        //  `"${t2.content.slice(0, 25)}..." happens before "${t1.content.slice(0, 25)}..."`,
-        //);
+        console.log(
+          `"${t2.content.slice(0, 25)}..." happens before "${t1.content.slice(0, 25)}..."`,
+        );
         dependentTaskIDs.add(t1.id);
       } else {
         // neither depends on the other
         // do nothing
+        console.log(
+          `"${t1.content.slice(0, 25)}..." and "${t2.content.slice(0, 25)}..." are independent`,
+        );
       }
     }
   }
 
-  //console.log("Filtering out task IDs", dependentTaskIDs);
+  console.log("Filtering out task IDs", dependentTaskIDs);
 
   return dependentTaskIDs;
 }
@@ -321,9 +328,9 @@ function compareTasks(t1, t2, ancestors) {
   }
 
   // If one task is the ancestor of the other, then the descendant is the dependency.
-  if (ancestors[t1.id].includes(t2.id)) {
+  if (ancestors[t1.id].some((ancestor) => ancestor.id === t2.id)) {
     return -1;
-  } else if (ancestors[t2.id].includes(t1.id)) {
+  } else if (ancestors[t2.id].some((ancestor) => ancestor.id === t1.id)) {
     return 1;
   }
 
