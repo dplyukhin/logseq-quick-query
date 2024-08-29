@@ -239,13 +239,13 @@ async function getDependentTaskIDs(tasks) {
   const ancestors = {};
   for (const task of tasks) {
     ancestors[task.id] = await getAncestors(task);
-    console.log(
-      `Ancestors of "${task.content.slice(0, 25)}...":`,
-      ancestors[task.id],
-    );
+    //console.log(
+    //  `Ancestors of "${task.content.slice(0, 25)}...":`,
+    //  ancestors[task.id],
+    //);
   }
 
-  console.log("Checking tasks for dependencies...", tasks);
+  //console.log("Checking tasks for dependencies...", tasks);
   // For each pair of tasks, check if one depends on the other
   const dependentTaskIDs = new Set();
   for (let i = 0; i < tasks.length; i++) {
@@ -255,27 +255,27 @@ async function getDependentTaskIDs(tasks) {
       const comparison = compareTasks(t1, t2, ancestors);
       if (comparison < 0) {
         // t1 is a dependency of t2
-        console.log(
-          `"${t1.content.slice(0, 25)}..." happens before "${t2.content.slice(0, 25)}..."`,
-        );
+        //console.log(
+        //  `"${t1.content.slice(0, 25)}..." happens before "${t2.content.slice(0, 25)}..."`,
+        //);
         dependentTaskIDs.add(t2.id);
       } else if (comparison > 0) {
         // t1 depends on t2
-        console.log(
-          `"${t2.content.slice(0, 25)}..." happens before "${t1.content.slice(0, 25)}..."`,
-        );
+        //console.log(
+        //  `"${t2.content.slice(0, 25)}..." happens before "${t1.content.slice(0, 25)}..."`,
+        //);
         dependentTaskIDs.add(t1.id);
       } else {
         // neither depends on the other
         // do nothing
-        console.log(
-          `"${t1.content.slice(0, 25)}..." and "${t2.content.slice(0, 25)}..." are independent`,
-        );
+        //console.log(
+        //  `"${t1.content.slice(0, 25)}..." and "${t2.content.slice(0, 25)}..." are independent`,
+        //);
       }
     }
   }
 
-  console.log("Filtering out task IDs", dependentTaskIDs);
+  //console.log("Filtering out task IDs", dependentTaskIDs);
 
   return dependentTaskIDs;
 }
@@ -360,16 +360,16 @@ function compareTasks(t1, t2, ancestors) {
     console.log("no common ancestor:", t1, t2, ancestors);
     throw new Error("Programming error finding common ancestor of tasks");
   }
-  //console.log(
-  //  "Tasks",
-  //  t1,
-  //  t2,
-  //  "have nearest common ancestor",
-  //  nearestCommonAncestor,
-  //  "and furthest uncommon ancestors",
-  //  furthestUncommonAncestor1,
-  //  furthestUncommonAncestor2,
-  //);
+  // console.log(
+  //   "Tasks",
+  //   t1,
+  //   t2,
+  //   "have nearest common ancestor",
+  //   nearestCommonAncestor,
+  //   "and furthest uncommon ancestors",
+  //   furthestUncommonAncestor1,
+  //   furthestUncommonAncestor2,
+  // );
 
   // Check if the conditions for T1 being the dependency of T2 are met.
   if (
@@ -412,7 +412,11 @@ function isPage(block) {
 
 /** Checks if the task may have causal dependencies. */
 function isOrderedBlock(block) {
-  return block.properties["logseq.order-list-type"] === "number";
+  return (
+    // I have no idea why both of these are possible
+    block.properties["logseq.order-list-type"] === "number" ||
+    block.properties["logseq.orderListType"] === "number"
+  );
 }
 
 /**************************** MAIN *****************************/
