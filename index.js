@@ -8,6 +8,13 @@ const defineSettings = [
     default: 3,
     type: "number",
   },
+  {
+    key: "tagsToIgnore",
+    title: "Tags to ignore",
+    description: "Comma-separated list of tags to ignore",
+    default: "",
+    type: "string",
+  },
 ];
 
 logseq.useSettingsSchema(defineSettings);
@@ -194,6 +201,11 @@ async function getTagsAndTasks(selectedTagNames) {
     if (tag.name === "todo" || tag.name === "doing") return false;
     // Filter out journal tags
     if (tag["journal?"]) return false;
+    // Filter out tags that should be ignored in settings
+    if (
+      logseq.settings.tagsToIgnore.toLowerCase().split(",").includes(tag.name)
+    )
+      return false;
     // Filter out tags that are not in the filtered tasks
     if (
       !filteredTasks.some((task) =>
