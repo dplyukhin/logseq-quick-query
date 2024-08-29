@@ -111,6 +111,8 @@ async function getTagsForPage(lowercaseBlockName) {
   return (ret || []).flat();
 }
 
+/**************************** UPDATING RENDERER *****************************/
+
 /** Given a list of tag names, return a renderer query that filters by those tag names. */
 function generateRendererQuery(tagNames) {
   if (!tagNames || tagNames.length === 0) {
@@ -157,6 +159,8 @@ async function parseRendererQuery(uuid) {
   }
 }
 
+/**************************** Fetching tasks *****************************/
+
 /** Given a list of tag names the user selected, return an object with:
  * - selectedTags: the tags that the user has selected
  * - remainingTags: the tags in the filtered tasks that are not selected
@@ -178,10 +182,15 @@ async function getTagsAndTasks(selectedTagNames) {
     tags.find((tag) => tag.name === tagName),
   );
   // Get the tasks that have all the selected tags
-  const filteredTasks = tasks.filter((task) =>
+  const tasksWithTags = tasks.filter((task) =>
     selectedTags.every((tag) =>
       task["path-refs"].map((obj) => obj.id).includes(tag.id),
     ),
+  );
+  // Filter out the tasks with causal dependencies
+  const dependentTaskIDs = await getDependentTaskIDs(tasksWithTags);
+  const filteredTasks = tasksWithTags.filter(
+    (task) => !dependentTaskIDs.has(task.id),
   );
   // Get the properties of those tasks
   const taskProperties = new Set(
@@ -223,7 +232,183 @@ async function getTagsAndTasks(selectedTagNames) {
   return { selectedTags, remainingTags, filteredTasks };
 }
 
-/********* MAIN  *********/
+/** Given a list of tasks, use task enumeration to identify *causal dependencies*.
+ * Return the set of IDs for tasks that depend on other tasks. */
+async function getDependentTaskIDs(tasks) {
+  // Get the ancestors of each task
+  const ancestors = {};
+  for (const task of tasks) {
+    ancestors[task.id] = await getAncestors(task);
+  }
+
+  //console.log("Checking tasks for dependencies...", tasks);
+  // For each pair of tasks, check if one depends on the other
+  const dependentTaskIDs = new Set();
+  for (let i = 0; i < tasks.length; i++) {
+    for (let j = i + 1; j < tasks.length; j++) {
+      const t1 = tasks[i];
+      const t2 = tasks[j];
+      const comparison = compareTasks(t1, t2, ancestors);
+      if (comparison < 0) {
+        // t1 is a dependency of t2
+        //console.log(
+        //  `"${t1.content.slice(0, 25)}..." happens before "${t2.content.slice(0, 25)}..."`,
+        //);
+        dependentTaskIDs.add(t2.id);
+      } else if (comparison > 0) {
+        // t1 depends on t2
+        //console.log(
+        //  `"${t2.content.slice(0, 25)}..." happens before "${t1.content.slice(0, 25)}..."`,
+        //);
+        dependentTaskIDs.add(t1.id);
+      } else {
+        // neither depends on the other
+        // do nothing
+      }
+    }
+  }
+
+  //console.log("Filtering out task IDs", dependentTaskIDs);
+
+  return dependentTaskIDs;
+}
+
+/** Returns negative if t1 is a dependency of t2, positive if t1 depends on t2, and
+ * returns 0 if neither depends on the other.
+ * ancestors is a map from task id to the list of ancestors of that task.
+ */
+function compareTasks(t1, t2, ancestors) {
+  // If T1 and T2 are ordered blocks and have the same parent then T1 is the dependency
+  // iff T1 is before T2 in the parent's children array.
+  //
+  // Example where T1 is the dependency of T2:
+  // - Parent
+  //   1. T1
+  //   2. ???
+  //   3. T2
+  //
+  // In general, let T1 and T2 be tasks with the nearest common ancestor B.
+  // Let C1 be the child of B that is an ancestor of T1, and let C2 be the child
+  // of B that is an ancestor of T2. (C1 and C2 are the "furthest uncommon ancestors"
+  // of T1 and T2.) Then T1 is the dependency of T2 iff:
+  // 1. C1 is before C2 in B's children array, and
+  // 2. Both C1 and C2 are ordered blocks.
+  //
+  // Example where T1 is the dependency of T2:
+  // - Parent
+  //   1. T1
+  //   2. C2
+  //      - T2  (notice that T2 doesn't have to be a numbered block!)
+  //
+  // Another example:
+  // - Foo
+  //   - Bar
+  //     - Qux (this is the nearest common ancestor of T1 and T2)
+  //       1. ???
+  //       2. C1
+  //          - T1
+  //       3. ???
+  //       4. C2
+  //          - Qux
+  //            - T2
+  //
+  // Edge case: one task is the ancestor of the other. In this case,
+  // counterintuitively, the *descendant* is the dependency.
+
+  // If the tasks are not located on the same page, then they are not dependent.
+  if (t1.page.id !== t2.page.id) {
+    return 0;
+  }
+
+  // If one task is the ancestor of the other, then the descendant is the dependency.
+  if (ancestors[t1.id].includes(t2.id)) {
+    return -1;
+  } else if (ancestors[t2.id].includes(t1.id)) {
+    return 1;
+  }
+
+  // Find the nearest common ancestor of t1 and t2.
+  let nearestCommonAncestor = null;
+  let furthestUncommonAncestor1 = t1;
+  let furthestUncommonAncestor2 = t2;
+  outerLoop: for (const c1 of ancestors[t1.id]) {
+    for (const c2 of ancestors[t2.id]) {
+      // Invariant: furthestUncommonAncestor1 comes before c1 in the ancestors list of t1,
+      // and furthestUncommonAncestor2 comes before c2 in the ancestors list of t2.
+      if (c1.id === c2.id) {
+        nearestCommonAncestor = c1;
+        break outerLoop;
+      }
+      furthestUncommonAncestor2 = c2;
+    }
+    furthestUncommonAncestor1 = c1;
+    furthestUncommonAncestor2 = t2; // reset this!
+  }
+  // Crash if any of these are not defined.
+  if (
+    !nearestCommonAncestor ||
+    !furthestUncommonAncestor1 ||
+    !furthestUncommonAncestor2
+  ) {
+    console.log("no common ancestor:", t1, t2, ancestors);
+    throw new Error("Programming error finding common ancestor of tasks");
+  }
+  //console.log(
+  //  "Tasks",
+  //  t1,
+  //  t2,
+  //  "have nearest common ancestor",
+  //  nearestCommonAncestor,
+  //  "and furthest uncommon ancestors",
+  //  furthestUncommonAncestor1,
+  //  furthestUncommonAncestor2,
+  //);
+
+  // Check if the conditions for T1 being the dependency of T2 are met.
+  if (
+    isOrderedBlock(furthestUncommonAncestor1) &&
+    isOrderedBlock(furthestUncommonAncestor2)
+  ) {
+    // The "children" array is a map of ['uuid', uuid] pairs.
+    const children = nearestCommonAncestor.children.map((c) => c[1]);
+    const index1 = children.indexOf(furthestUncommonAncestor1.uuid);
+    const index2 = children.indexOf(furthestUncommonAncestor2.uuid);
+    if (index1 < index2) {
+      return -1;
+    } else {
+      return 1;
+    }
+  } else {
+    return 0;
+  }
+}
+
+/** Returns the list of this block's ancestors---more recent ancestors come first.
+ * The last ancestor is the page the block is on. */
+async function getAncestors(block) {
+  const ancestors = [];
+  let currentBlock = block;
+  while (!isPage(currentBlock)) {
+    currentBlock =
+      (await logseq.Editor.getBlock(currentBlock.parent.id)) ||
+      (await logseq.Editor.getPage(currentBlock.parent.id));
+    ancestors.push(currentBlock);
+  }
+  return ancestors;
+}
+
+/** Returns true iff the block is a page. */
+function isPage(block) {
+  // A page is just a block without a parent.
+  return !block.parent;
+}
+
+/** Checks if the task may have causal dependencies. */
+function isOrderedBlock(block) {
+  return block.properties["logseq.order-list-type"] === "number";
+}
+
+/**************************** MAIN *****************************/
 
 function main() {
   const getKey = (uuid) => `qquery_${uuid}`;
