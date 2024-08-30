@@ -9,9 +9,26 @@ const defineSettings = [
     type: "number",
   },
   {
+    key: "tagsToHide",
+    title: "Tags to hide",
+    description:
+      "Comma-separated list of tags that should not appear in the selector",
+    default: "",
+    type: "string",
+  },
+  {
     key: "tagsToIgnore",
     title: "Tags to ignore",
-    description: "Comma-separated list of tags to ignore",
+    description:
+      "Comma-separated list of tags whose tasks should not be included in the results",
+    default: "",
+    type: "string",
+  },
+  {
+    key: "namespacesToIgnore",
+    title: "Namespaces to ignore",
+    description:
+      "Comma-separated list of namespaces whose tasks should not be included in the results",
     default: "",
     type: "string",
   },
@@ -160,15 +177,42 @@ async function getTagsAndTasks(selectedTagNames) {
   const tasks = await getTasks();
   const tags = await getTags();
 
-  // Get the tags that the user has selected, in the order they selected them
-  const selectedTags = selectedTagNames.map((tagName) =>
-    tags.find((tag) => tag.name === tagName),
-  );
-  // Get the tasks that have all the selected tags
-  const tasksWithTags = tasks.filter((task) =>
-    selectedTags.every((tag) =>
-      task["path-refs"].map((obj) => obj.id).includes(tag.id),
-    ),
+  // Get the tags that the user has selected, in the order they selected them---
+  // likewise with the tags and the namespaces they asked us to ignore.
+  const selectedTags = selectedTagNames
+    .map((tagName) => tags.find((tag) => tag.name === tagName))
+    .filter((tag) => !!tag); // Filter out any tag names that didn't map to anything
+
+  const tagsToIgnoreNames = logseq.settings.tagsToIgnore.split(",");
+  const tagsToIgnore = [];
+  for (const name of tagsToIgnoreNames) {
+    const page = await logseq.Editor.getPage(name);
+    if (page) tagsToIgnore.push(page);
+  }
+
+  const namespaces = logseq.settings.namespacesToIgnore.split(",");
+  const pagesToIgnore = [];
+  for (let i = 0; i < namespaces.length; i++) {
+    const nsPages = await logseq.Editor.getPagesFromNamespace(namespaces[i]);
+    pagesToIgnore.push(...nsPages);
+  }
+
+  console.log("Ignoring tags", tagsToIgnore);
+  console.log("Ignoring pages", pagesToIgnore);
+
+  // Get the tasks that have all the selected tags, and none of the ignored tags
+  const tasksWithTags = tasks.filter(
+    (task) =>
+      // Check if the task is on a page that should be ignored
+      !pagesToIgnore.some((page) => task.page.id === page.id) &&
+      // Check if the task has all the selected tags
+      selectedTags.every((tag) =>
+        task["path-refs"].map((obj) => obj.id).includes(tag.id),
+      ) &&
+      // Check if the task has none of the ignored tags
+      tagsToIgnore.every(
+        (tag) => !task["path-refs"].map((obj) => obj.id).includes(tag.id),
+      ),
   );
   console.log("tasksWithTags", tasksWithTags);
   // Filter out the tasks with causal dependencies
@@ -176,6 +220,8 @@ async function getTagsAndTasks(selectedTagNames) {
   const filteredTasks = tasksWithTags.filter(
     (task) => !dependentTaskIDs.has(task.id),
   );
+  console.log("filteredTasks", filteredTasks);
+
   // Get the properties of those tasks
   const taskProperties = new Set(
     filteredTasks.map((task) => task["properties-order"]).flat(),
@@ -193,9 +239,7 @@ async function getTagsAndTasks(selectedTagNames) {
     // Filter out journal tags
     if (tag["journal?"]) return false;
     // Filter out tags that should be ignored in settings
-    if (
-      logseq.settings.tagsToIgnore.toLowerCase().split(",").includes(tag.name)
-    )
+    if (logseq.settings.tagsToHide.toLowerCase().split(",").includes(tag.name))
       return false;
     // Filter out tags that are not in the filtered tasks
     if (
