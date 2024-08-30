@@ -39,6 +39,53 @@ logseq.onSettingsChanged(() => {
   console.log("Quick query setting updated.");
 });
 
+/******************************* GOBLIN TOOLS *****************************/
+
+/** Given a high-level task, query goblin.tools and return a list of sub-tasks.
+ * The `level` parameter controls how in-depth the breakdown is.
+ * Returns null if the fetch fails.
+ */
+async function fetchStepByStepBreakdown(text, level = 2) {
+  try {
+    const response = await fetch("https://goblin.tools/api/todo/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Text: text, Spiciness: level, Ancestors: [] }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to fetch breakdown:", err);
+  }
+  return null;
+}
+
+/** Given a brain dump of text, query goblin.tools and extract a list of tasks.
+ * Returns null if the fetch fails.
+ */
+async function compileIntoTasks(text) {
+  try {
+    const response = await fetch("https://goblin.tools/api/Compiler", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Text: text }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to fetch breakdown:", err);
+  }
+  return null;
+}
+
 /******************************* HELPERS *****************************/
 
 /** Get all the doable tasks on the page named `lowercaseBlockName`.
