@@ -118,6 +118,16 @@ async function getTags() {
   return (ret || []).flat();
 }
 
+function today() {
+  const today = new Date();
+
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0"); // Months are zero-based, so add 1
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return parseInt(`${year}${month}${day}`);
+}
+
 /**************************** UPDATING RENDERER *****************************/
 
 /** Given a list of tag names, return a renderer query that filters by those tag names. */
@@ -212,7 +222,9 @@ async function getTagsAndTasks(selectedTagNames) {
       // Check if the task has none of the ignored tags
       tagsToIgnore.every(
         (tag) => !task["path-refs"].map((obj) => obj.id).includes(tag.id),
-      ),
+      ) &&
+      // Check if the task is scheduled for a date later than today
+      (!task.scheduled || task.scheduled <= today()),
   );
   console.log("tasksWithTags", tasksWithTags);
   // Filter out the tasks with causal dependencies
