@@ -51,17 +51,12 @@ logseq.onSettingsChanged(() => {
      ]
  }
 */
-async function getTasksForPage(lowercaseBlockName) {
+async function getTasks() {
   let ret;
   try {
     ret = await logseq.DB.datascriptQuery(`
       [:find (pull ?task [*])
        :where
-       ; Get current page
-       [?page :block/name "${lowercaseBlockName}"]
-       ; Get tasks on the page, or tasks that reference the page
-       (or [?task :block/page ?page]
-           [?task :block/path-refs ?page])
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
       ]
@@ -87,17 +82,12 @@ async function getTasksForPage(lowercaseBlockName) {
  }
  * Notice that "name" is just original-name converted to lowercase.
  */
-async function getTagsForPage(lowercaseBlockName) {
+async function getTags() {
   let ret;
   try {
     ret = await logseq.DB.datascriptQuery(`
       [:find (pull ?tag [*])
        :where
-       ; Get current page
-       [?page :block/name "${lowercaseBlockName}"]
-       ; Get tasks on the page, or tasks that reference the page
-       (or [?task :block/page ?page]
-           [?task :block/path-refs ?page])
        [?task :block/marker ?marker]
        [(contains? #{"TODO" "DOING"} ?marker)]
        ; Get tags of those tasks
@@ -167,15 +157,8 @@ async function parseRendererQuery(uuid) {
  * - filteredTasks: the tasks that have all the selected tags
  */
 async function getTagsAndTasks(selectedTagNames) {
-  let page = await logseq.Editor.getCurrentPage();
-  console.log("page", page);
-  if (page === null || (!page.name && !page.parent)) return;
-  if (!page.name) {
-    page = await logseq.Editor.getPage(page.parent.id);
-  }
-
-  const tasks = await getTasksForPage(page.name);
-  const tags = await getTagsForPage(page.name);
+  const tasks = await getTasks();
+  const tags = await getTags();
 
   // Get the tags that the user has selected, in the order they selected them
   const selectedTags = selectedTagNames.map((tagName) =>
@@ -187,6 +170,7 @@ async function getTagsAndTasks(selectedTagNames) {
       task["path-refs"].map((obj) => obj.id).includes(tag.id),
     ),
   );
+  console.log("tasksWithTags", tasksWithTags);
   // Filter out the tasks with causal dependencies
   const dependentTaskIDs = await getDependentTaskIDs(tasksWithTags);
   const filteredTasks = tasksWithTags.filter(
@@ -204,8 +188,6 @@ async function getTagsAndTasks(selectedTagNames) {
     if (selectedTagNames.includes(tag.name)) return false;
     // Filter out tags that are properties of the tasks
     if (taskProperties.has(tag.name)) return false;
-    // Filter out the current page
-    if (tag.uuid === page.uuid) return false;
     // Filter out "todo" and "doing" tags
     if (tag.name === "todo" || tag.name === "doing") return false;
     // Filter out journal tags
@@ -413,9 +395,10 @@ function isPage(block) {
 /** Checks if the task may have causal dependencies. */
 function isOrderedBlock(block) {
   return (
+    block.properties &&
     // I have no idea why both of these are possible
-    block.properties["logseq.order-list-type"] === "number" ||
-    block.properties["logseq.orderListType"] === "number"
+    (block.properties["logseq.order-list-type"] === "number" ||
+      block.properties["logseq.orderListType"] === "number")
   );
 }
 
